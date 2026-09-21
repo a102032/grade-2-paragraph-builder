@@ -15,8 +15,8 @@ it works with no internet connection at all.
 | Chapter | Steps | The idea |
 | --- | --- | --- |
 | **1 · Indent** | 1–5 | Three groups of children are standing in rows. You cannot tell the groups apart until the first row of each group steps back — that step back is an indent. Steps 4–5 repeat the discovery with a real three-paragraph story. |
-| **2 · Full Lines** | 6–9 | Lines that begin in random places make the reader hunt for the start of every line; only the *first* line is indented and every other one begins at the red wall. Then: stopping early chops the sentence into pieces, so write to the green wall and sweep back to the left. |
-| **3 · Punctuation** | 10–11 | The periods float away from their sentences and suddenly look like they belong to the *next* sentence. Snapping them back against the last letter shows exactly where a reader should stop and take a breath. |
+| **2 · Full Lines** | 6–9 | Lines that begin in random places make the reader hunt for the start of every line; only the *first* line is indented and every other one begins at the red wall. Then: stopping early chops the sentence into pieces, so fill each line to the green wall — a new sentence simply carries on after the period — and sweep back to the far left when the room runs out. |
+| **3 · Punctuation** | 10–13 | Two habits, both about the same rule. First the periods float away mid-line and start to look like they belong to the *next* sentence. Then a sentence ends at the right-hand edge and leaves its period stranded at the start of the next line, all on its own — so it flies back up to the word it belongs to. |
 
 Each step animates one idea. Nothing moves until you press **Next**, so you can
 talk over it for as long as the class needs.
@@ -28,7 +28,7 @@ talk over it for as long as the class needs.
 - **Replay this step's animation** — the ↻ button, or <kbd>R</kbd>
 - **Full screen** — the ⛶ button, or <kbd>F</kbd>
 - **Teacher notes** — the **?** button
-- **Link straight to a step** — add `#7` to the URL
+- **Link straight to a step** — add `#7` to the URL (steps run 1–13)
 
 The whole lesson is laid out once at 1280×800 and then scaled to fit the
 window, so it never scrolls, the buttons are never off screen, and a line of

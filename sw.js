@@ -4,8 +4,8 @@
  * pre-cached on install and the Google font is picked up at runtime the
  * first time the page is opened online.
  */
-const CACHE_NAME = 'paragraph-app-v1';
-const RUNTIME_CACHE = 'paragraph-runtime-v1';
+const CACHE_NAME = 'paragraph-app-v2';
+const RUNTIME_CACHE = 'paragraph-runtime-v2';
 
 const urlsToCache = [
   './',

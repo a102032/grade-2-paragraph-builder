@@ -244,6 +244,7 @@ body {
 .scene {
   grid-area: 1 / 1;
   align-self: start;
+  min-width: 0;          /* let a grid item shrink, so nowrap lines really overflow */
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease;
@@ -265,6 +266,7 @@ body {
               margin-bottom 1.1s ease-in-out;
 }
 .scene.is-indent .lesson-p { text-indent: var(--indent); }
+.scene[data-scene="fill"] .lesson-p { text-indent: var(--indent); }
 .scene.is-skip .lesson-p:not(:last-child) { margin-bottom: var(--lh); }
 
 /* --- scene: rows of children --------------------------------------
@@ -307,7 +309,7 @@ body {
   position: absolute;
   left: var(--gutter);
   right: var(--rpad);
-  top: calc(var(--top) + var(--lh) * 4.2);
+  top: calc(var(--top) + var(--lh) * 5.2);
   height: var(--lh);
   pointer-events: none;
   opacity: 0;
@@ -363,10 +365,12 @@ body {
   background: transparent;
   transition: background 0.6s ease 0.6s;
 }
-.scene.is-home .pair { background: #fef08a; }
+.scene.is-home .pair,
+.scene.is-tidy .pair { background: #fef08a; }
 
 .mark {
   display: inline-block;
+  text-indent: 0;
   color: #dc2626;
   margin-left: 0.85em;
   margin-right: -0.12em;
@@ -381,6 +385,32 @@ body {
   margin-right: 0;
   transform: translateY(0) scale(1);
 }
+
+/* --- scene: punctuation stranded at the start of the next line ---
+   Hand-placed lines that never wrap, so the stranded mark lands in the
+   same place on every screen. `--dx` is measured in JS, which is what
+   lets the mark fly back to the word it belongs to. */
+.sline {
+  line-height: var(--lh);
+  font-size: var(--sline-fs, var(--fs));
+  font-weight: 900;
+  white-space: nowrap;
+  padding-left: 0;
+  transition: padding-left 1.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.sline.lead { text-indent: var(--indent); }
+
+/* In the untidy state the next line budges over to make room for it. */
+.scene:not(.is-tidy) .sline.shift { padding-left: 24px; }
+
+.drop {
+  display: inline-block;
+  text-indent: 0;
+  color: #dc2626;
+  transform: translate(var(--dx, 0px), var(--lh));
+  transition: transform 1.1s cubic-bezier(0.34, 1.56, 0.64, 1), color 1.1s ease;
+}
+.scene.is-tidy .drop { color: var(--ink); transform: none; }
 
 /* ------------------------- navigation ------------------------- */
 .nav {
@@ -565,9 +595,16 @@ body.portrait .rotate-hint { display: block; }
       <!-- Chapter 2b: fill the line all the way to the end -->
       <section class="scene" data-scene="fill" aria-label="A paragraph that fills each line to the end">
         <div class="fill-col">
-          <p class="lesson-p">Our class built a huge snow fort at recess. We packed the walls with our mittens until they were as tall as the fence. Then we all squeezed inside.</p>
+          <p class="lesson-p">Our class built a huge snow fort at recess. We packed the walls with our mittens until they were as tall as the fence. Then we crawled inside and made a secret room. It was the best fort we had ever built.</p>
         </div>
         <div class="sweep" aria-hidden="true"><i class="sweep-arrow"></i></div>
+      </section>
+
+      <!-- Chapter 3b: punctuation must not start a line on its own -->
+      <section class="scene" data-scene="strand" aria-label="Sentences whose ending punctuation slipped onto the next line">
+        <div class="sline lead">The dog walked in the park. He looked for gray <span class="pair">squirrels<span class="drop">.</span></span></div>
+        <div class="sline shift">He saw a little squirrel sitting up in a tall tree. He barked.</div>
+        <div class="sline">The squirrel ran away fast. The dog chased after it <span class="pair">quickly<span class="drop">!</span></span></div>
       </section>
 
       <!-- Chapter 3: ending punctuation stays next to the last letter -->
@@ -609,6 +646,7 @@ body.portrait .rotate-hint { display: block; }
   <h3>3 &middot; Punctuation</h3>
   <ul>
     <li>Steps 10&ndash;11: a floating period looks like it belongs to the next sentence. Ending punctuation holds on tight to the last letter.</li>
+    <li>Steps 12&ndash;13: the other half of the habit &mdash; a sentence that ends at the right-hand edge leaves its period stranded at the start of the next line. The rule to say out loud: <em>if the word and its mark will not fit together, take the whole word down to the next line.</em></li>
   </ul>
 
   <h3>Keyboard &amp; smartboard</h3>
@@ -672,7 +710,13 @@ body.portrait .rotate-hint { display: block; }
       why: 'A floating period looks like it belongs to the NEXT sentence, so the reader stops in the wrong place.' },
     { ch: 2, scene: 'punct', state: ['is-home'],
       title: 'Ending punctuation holds on tight to the last letter!',
-      why: 'Snug punctuation tells the reader exactly where to stop and take a breath.' }
+      why: 'Snug punctuation tells the reader exactly where to stop and take a breath.' },
+    { ch: 2, scene: 'strand', state: [],
+      title: 'This writer ran out of room, so the period fell to the next line all alone.',
+      why: 'A period is not a word. It never starts a line by itself \u2014 it belongs to the sentence above it.' },
+    { ch: 2, scene: 'strand', state: ['is-tidy'],
+      title: 'Bring it back up! The mark goes right beside the last letter.',
+      why: 'If the last word will not fit together with its punctuation, move the whole word down to the next line. They always travel together.' }
   ];
 
   var scenes = {};
@@ -694,6 +738,49 @@ body.portrait .rotate-hint { display: block; }
 
   var current = 0;
   var textTimer = null;
+
+  // Work out how far each stranded mark has to fly to reach the word it
+  // belongs to. Measured from the rendered boxes, so it stays right whichever
+  // font ends up being used.
+  function placeStrays() {
+    var scene = scenes.strand;
+    if (!scene) return;
+    var ref = scene.querySelector('.sline');
+    if (!ref) return;
+
+    // These lines are hand-placed and must never wrap. If a wider fallback
+    // font is in use they would run off the paper, so scale them down to fit
+    // instead of letting the ends get clipped.
+    scene.style.removeProperty('--sline-fs');
+    var size = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs'));
+    var lines = scene.querySelectorAll('.sline');
+    for (var pass = 0; pass < 4; pass++) {
+      var over = 1;
+      Array.prototype.forEach.call(lines, function (el) {
+        if (el.clientWidth > 0) over = Math.max(over, el.scrollWidth / el.clientWidth);
+      });
+      if (over <= 1.001) break;
+      size = size / over;
+      scene.style.setProperty('--sline-fs', size + 'px');
+    }
+    // Measure with the marks tidy and unanimated, so we read their real
+    // home position; restored in the same tick, so nothing flickers.
+    var drops = scene.querySelectorAll('.drop');
+    var saved = scene.className;
+    scene.className = 'scene on is-tidy no-anim';
+
+    var zoom = parseFloat(getComputedStyle(stage).getPropertyValue('--s')) || 1;
+    var edge = ref.getBoundingClientRect().left;
+    var shift = [];
+    Array.prototype.forEach.call(drops, function (el) {
+      shift.push((edge - el.getBoundingClientRect().left) / zoom);
+    });
+
+    scene.className = saved;
+    Array.prototype.forEach.call(drops, function (el, i) {
+      el.style.setProperty('--dx', shift[i] + 'px');
+    });
+  }
 
   // ---- fit the stage to the window --------------------------------------
   function fit() {
@@ -773,6 +860,7 @@ body.portrait .rotate-hint { display: block; }
     for (var name in scenes) {
       if (name !== step.scene) scenes[name].classList.remove('on');
     }
+    if (step.scene === 'strand') placeStrays();
     paint(scenes[step.scene], step.state, sameScene || replaying);
 
     paper.classList.toggle('show-left-wall', step.scene === 'left');
@@ -854,6 +942,11 @@ body.portrait .rotate-hint { display: block; }
   });
 
   // ---- start -------------------------------------------------------------
+  placeStrays();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(placeStrays).catch(function () {});
+  }
+
   var fromHash = parseInt((location.hash || '').slice(1), 10);
   goTo(fromHash >= 1 && fromHash <= STEPS.length ? fromHash - 1 : 0);
 })();
