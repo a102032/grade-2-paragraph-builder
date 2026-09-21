@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Paragraph Practice: Indents, Full Lines and Punctuation</title>
+<meta name="description" content="Interactive paragraph spacing and indenting tool for the smartboard.">
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#8b5a2b">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(console.error);
+    });
+  }
+</script>
+
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Paragraphs">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+
+<style>
+/* =================================================================
+   THE STAGE
+   The whole lesson is laid out once at a fixed 1280x800 and then
+   scaled by JS to fit whatever window it lands in. That means:
+     - it never scrolls and the buttons are never off screen,
+     - the writing wraps in exactly the same place on every screen,
+       so a line never breaks into an accidental extra "paragraph",
+     - the writing always sits exactly on the blue lines, because
+       line-height and the ruled background are both 42px here.
+   ================================================================= */
+:root {
+  --lh: 42px;            /* one ruled line */
+  --fs: 32px;            /* handwriting */
+  --fs-emoji: 28px;
+  --top: 21px;           /* first line sits half a line down */
+  --gutter: 112px;       /* left edge of the writing */
+  --rpad: 36px;
+  --indent: 105px;       /* a two-finger indent */
+
+  --ink: #1f2937;
+  --sky: #87cefa;
+  --red: #ff6b6b;
+  --wood: #c28e5c;
+  --wood-dark: #b88656;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;      /* nothing on this page ever scrolls */
+}
+
+body {
+  font-family: 'Nunito', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  background-color: var(--wood);
+  background-image:
+    repeating-linear-gradient(45deg, var(--wood-dark) 25%, transparent 25%, transparent 75%, var(--wood-dark) 75%, var(--wood-dark)),
+    repeating-linear-gradient(45deg, var(--wood-dark) 25%, var(--wood) 25%, var(--wood) 75%, var(--wood-dark) 75%, var(--wood-dark));
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+  color: var(--ink);
+}
+
+.stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1280px;
+  height: 800px;
+  transform: translate(-50%, -50%) scale(var(--s, 1));
+  transform-origin: center center;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ------------------------- top bar ------------------------- */
+.topbar {
+  flex: 0 0 50px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chapter-tabs { display: flex; gap: 10px; }
+
+.tab {
+  font: inherit;
+  font-weight: 700;
+  font-size: 18px;
+  padding: 9px 20px;
+  border-radius: 999px;
+  border: 3px solid rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.85);
+  color: #4b3520;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s, transform 0.1s;
+}
+.tab:hover { background: #fff; }
+.tab[aria-current="true"] { background: #1d4ed8; border-color: #1e3a8a; color: #fff; }
+.tab:active { transform: translateY(2px); }
+
+.tools { display: flex; gap: 10px; }
+
+.tool {
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 3px solid rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.tool:hover { background: #fff; }
+.tool:active { transform: translateY(2px); }
+
+/* ------------------------- instruction banner ------------------------- */
+.banner {
+  flex: 0 0 130px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 10px 26px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  border: 4px dashed #9ca3af;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.banner h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.16;
+  color: #1d4ed8;
+}
+
+.banner p {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #6b7280;
+}
+
+.banner h1, .banner p { transition: opacity 0.18s ease; }
+.banner.fading h1, .banner.fading p { opacity: 0; }
+
+/* ------------------------- the sheet of paper ------------------------- */
+.paper {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--lh) - 2px),
+    var(--sky) calc(var(--lh) - 2px),
+    var(--sky) var(--lh));
+  background-position: 0 var(--top);
+  overflow: hidden;
+}
+
+.red-margin {
+  position: absolute;
+  left: calc(var(--gutter) - 14px);
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: var(--red);
+  z-index: 10;
+  transition: box-shadow 0.4s, width 0.4s;
+}
+.paper.show-left-wall .red-margin {
+  width: 6px;
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.3);
+}
+
+.right-wall {
+  position: absolute;
+  right: var(--rpad);
+  top: var(--top);
+  bottom: 0;
+  width: 0;
+  border-left: 4px dashed rgba(34, 197, 94, 0.8);
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.paper.show-right-wall .right-wall { opacity: 1; }
+
+.hole {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  background-color: #333;
+  border-radius: 50%;
+  left: 26px;
+  box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.6), 0 2px 2px rgba(255, 255, 255, 0.8);
+  z-index: 20;
+}
+.hole.top { top: 12%; }
+.hole.mid { top: 50%; transform: translateY(-50%); }
+.hole.bot { bottom: 12%; }
+
+/* Every scene lives in the same grid cell, so swapping scenes never
+   shifts the paper or the lines. */
+.sheet {
+  position: relative;
+  display: grid;
+  height: 100%;
+  padding: var(--top) var(--rpad) 0 var(--gutter);
+  z-index: 15;
+}
+
+.scene {
+  grid-area: 1 / 1;
+  align-self: start;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease;
+}
+.scene.on { opacity: 1; visibility: visible; }
+
+/* Transitions are muted for one frame when a scene is swapped in, so it
+   arrives already set up instead of animating while it is invisible. */
+.scene.no-anim, .scene.no-anim * { transition: none !important; }
+
+.lesson-p {
+  line-height: var(--lh);
+  font-size: var(--fs);
+  font-weight: 900;
+  color: var(--ink);
+  margin: 0;
+  text-indent: 0;
+  transition: text-indent 1.1s cubic-bezier(0.34, 1.56, 0.64, 1),
+              margin-bottom 1.1s ease-in-out;
+}
+.scene.is-indent .lesson-p { text-indent: var(--indent); }
+.scene.is-skip .lesson-p:not(:last-child) { margin-bottom: var(--lh); }
+
+/* --- scene: rows of children --------------------------------------
+   Each group is two hand-placed rows that are never allowed to wrap,
+   so the groups stay exactly two lines tall on every screen. */
+.group { margin-bottom: 0; transition: margin-bottom 1.1s ease-in-out; }
+.scene.is-skip .group:not(:last-child) { margin-bottom: var(--lh); }
+
+.emoji-row {
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  font-size: var(--fs-emoji);
+  line-height: var(--lh);
+  letter-spacing: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  margin-left: 0;
+  transition: margin-left 1.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.scene.is-indent .emoji-row.lead { margin-left: var(--indent); }
+
+/* --- scene: every new line begins at the far left --- */
+.hand-line {
+  line-height: var(--lh);
+  font-size: var(--fs);
+  font-weight: 900;
+  white-space: nowrap;
+  margin-left: calc(var(--off, 0) * var(--lh));
+  transition: margin-left 1.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.scene.is-aligned .hand-line:not(.keep) { margin-left: 0; }
+
+/* --- scene: write all the way to the end of the line --- */
+.fill-col {
+  width: 58%;
+  transition: width 1.6s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.scene.is-full .fill-col { width: 100%; }
+
+.sweep {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--rpad);
+  top: calc(var(--top) + var(--lh) * 4.2);
+  height: var(--lh);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s;
+  z-index: 16;
+}
+.scene.is-full .sweep { opacity: 1; }
+
+/* The arrow is drawn in CSS so it never depends on a font having the
+   right glyph, and it travels over empty lines, never over the words. */
+.sweep-arrow {
+  position: absolute;
+  top: 16px;
+  width: 78px;
+  height: 10px;
+  border-radius: 5px;
+  background: #16a34a;
+  animation: sweep-back 2.8s ease-in-out infinite;
+}
+.sweep-arrow::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  border-left: 10px solid #16a34a;
+  border-bottom: 10px solid #16a34a;
+  border-radius: 4px;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+/* End of one line, down and back to the start of the next. */
+@keyframes sweep-back {
+  0%   { left: 100%; transform: translate(-100%, calc(var(--lh) * -1)); opacity: 0; }
+  10%  { left: 100%; transform: translate(-100%, calc(var(--lh) * -1)); opacity: 1; }
+  60%  { left: 0;    transform: translate(0, 0); opacity: 1; }
+  78%  { left: 0;    transform: translate(0, 0); opacity: 0; }
+  100% { left: 0;    transform: translate(0, 0); opacity: 0; }
+}
+
+/* --- scene: ending punctuation stays next to the last letter --- */
+.punct-p {
+  line-height: var(--lh);
+  font-size: var(--fs);
+  font-weight: 900;
+  margin: 0;
+}
+
+.pair {
+  border-radius: 8px;
+  padding: 0 2px;
+  background: transparent;
+  transition: background 0.6s ease 0.6s;
+}
+.scene.is-home .pair { background: #fef08a; }
+
+.mark {
+  display: inline-block;
+  color: #dc2626;
+  margin-left: 0.85em;
+  margin-right: -0.12em;
+  transform: translateY(-0.12em) scale(1.35);
+  transition: margin 1.1s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 1.1s cubic-bezier(0.34, 1.56, 0.64, 1),
+              color 1.1s ease;
+}
+.scene.is-home .mark {
+  color: var(--ink);
+  margin-left: 0;
+  margin-right: 0;
+  transform: translateY(0) scale(1);
+}
+
+/* ------------------------- navigation ------------------------- */
+.nav {
+  flex: 0 0 76px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-btn {
+  font: inherit;
+  font-weight: 900;
+  font-size: 30px;
+  color: #fff;
+  height: 68px;
+  width: 200px;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.12s, box-shadow 0.12s;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.2);
+}
+
+#btn-back { background: #ef4444; border: 4px solid #991b1b; }
+#btn-back:hover:not(:disabled) { background: #dc2626; }
+#btn-next { background: #22c55e; border: 4px solid #166534; }
+#btn-next:hover:not(:disabled) { background: #16a34a; }
+
+.nav-btn:active:not(:disabled) { transform: translateY(8px); box-shadow: 0 0 0 rgba(0, 0, 0, 0.2); }
+.nav-btn:disabled {
+  background: #9ca3af;
+  border-color: #6b7280;
+  color: #e5e7eb;
+  cursor: not-allowed;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.1);
+}
+
+.dots { display: flex; gap: 11px; align-items: center; }
+.dots .gap { width: 20px; }
+
+.dot {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: #e5e7eb;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: background 0.3s, transform 0.3s;
+}
+.dot[aria-current="true"] { background: #1d4ed8; transform: scale(1.3); }
+.dot.done { background: #93c5fd; }
+
+/* ------------------------- help ------------------------- */
+dialog.help {
+  border: none;
+  border-radius: 20px;
+  padding: 30px;
+  max-width: 660px;
+  width: calc(100% - 32px);
+  font-size: 17px;
+  line-height: 1.6;
+  color: #374151;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+dialog.help::backdrop { background: rgba(0, 0, 0, 0.55); }
+dialog.help h2 { margin: 0 0 12px; color: #8b5a2b; font-size: 26px; }
+dialog.help h3 { margin: 18px 0 4px; color: #1d4ed8; font-size: 19px; }
+dialog.help ul { margin: 4px 0; padding-left: 22px; }
+dialog.help kbd {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+dialog.help button {
+  font: inherit;
+  font-weight: 900;
+  margin-top: 20px;
+  padding: 10px 26px;
+  border-radius: 12px;
+  border: 3px solid #166534;
+  background: #22c55e;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* Shown only when the window is so tall and narrow that the stage has
+   to be scaled right down. */
+.rotate-hint {
+  position: fixed;
+  inset: auto 0 0 0;
+  display: none;
+  background: rgba(31, 41, 55, 0.92);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  z-index: 50;
+}
+body.portrait .rotate-hint { display: block; }
+
+:focus-visible { outline: 4px solid #facc15; outline-offset: 3px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage">
+
+  <div class="topbar">
+    <div class="chapter-tabs" id="chapter-tabs"></div>
+    <div class="tools">
+      <button class="tool" id="btn-replay" type="button" title="Play this step again (R)" aria-label="Play this step again">&#8635;</button>
+      <button class="tool" id="btn-help" type="button" title="Teacher notes" aria-label="Teacher notes">?</button>
+      <button class="tool" id="btn-full" type="button" title="Full screen (F)" aria-label="Toggle full screen">&#9974;</button>
+    </div>
+  </div>
+
+  <div class="banner" id="banner">
+    <h1 id="instruction">Loading&hellip;</h1>
+    <p id="why"></p>
+  </div>
+
+  <div class="paper" id="paper">
+    <div class="hole top"></div>
+    <div class="hole mid"></div>
+    <div class="hole bot"></div>
+    <div class="red-margin"></div>
+    <div class="right-wall"></div>
+
+    <div class="sheet">
+
+      <!-- Chapter 1: three groups of children, two rows each -->
+      <section class="scene" data-scene="emoji" aria-label="Rows of students standing in three groups">
+        <div class="group">
+          <div class="emoji-row lead">&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;</div>
+          <div class="emoji-row">&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;</div>
+        </div>
+        <div class="group">
+          <div class="emoji-row lead">&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;</div>
+          <div class="emoji-row">&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;</div>
+        </div>
+        <div class="group">
+          <div class="emoji-row lead">&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;</div>
+          <div class="emoji-row">&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;&#128103;&#128102;</div>
+        </div>
+      </section>
+
+      <!-- Chapter 1: the same idea in real writing -->
+      <section class="scene" data-scene="text" aria-label="A story written in three paragraphs">
+        <p class="lesson-p">At recess, all the second graders ran straight out to the playground together.</p>
+        <p class="lesson-p">Some kids swung so high they almost touched the sky. Others played a big game of tag.</p>
+        <p class="lesson-p">When the bell rang, everyone lined up at the door. It was a great day outside!</p>
+      </section>
+
+      <!-- Chapter 2a: every new line begins at the far left -->
+      <section class="scene" data-scene="left" aria-label="Lines of writing that begin in different places">
+        <div class="hand-line keep" style="--off: 2.5">My dog is named Scout.</div>
+        <div class="hand-line" style="--off: 1.8">He likes to chase the</div>
+        <div class="hand-line" style="--off: 0.7">ball around our yard.</div>
+        <div class="hand-line" style="--off: 2.9">He never brings it back.</div>
+      </section>
+
+      <!-- Chapter 2b: fill the line all the way to the end -->
+      <section class="scene" data-scene="fill" aria-label="A paragraph that fills each line to the end">
+        <div class="fill-col">
+          <p class="lesson-p">Our class built a huge snow fort at recess. We packed the walls with our mittens until they were as tall as the fence. Then we all squeezed inside.</p>
+        </div>
+        <div class="sweep" aria-hidden="true"><i class="sweep-arrow"></i></div>
+      </section>
+
+      <!-- Chapter 3: ending punctuation stays next to the last letter -->
+      <section class="scene" data-scene="punct" aria-label="Sentences with their ending punctuation">
+        <p class="punct-p">We ran to the <span class="pair">swings<span class="mark">.</span></span> Maya went <span class="pair">first<span class="mark">.</span></span> Then it was my <span class="pair">turn<span class="mark">.</span></span> What a great <span class="pair">day<span class="mark">!</span></span></p>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="nav">
+    <button id="btn-back" class="nav-btn" type="button">&#11013;&#65039; Back</button>
+    <div class="dots" id="dots" aria-label="Lesson steps"></div>
+    <button id="btn-next" class="nav-btn" type="button">Next &#10145;&#65039;</button>
+  </div>
+
+</div>
+
+<p class="sr-only" id="live" aria-live="polite"></p>
+<div class="rotate-hint">Turn your device sideways for a bigger lesson.</div>
+
+<dialog class="help" id="help">
+  <h2>Teacher notes</h2>
+  <p>Three short lessons about the shape of a paragraph. Move at the class&rsquo;s pace &mdash; each step animates one idea, and you can replay it as often as you like.</p>
+
+  <h3>1 &middot; Indent</h3>
+  <ul>
+    <li>Steps 1&ndash;3 use rows of children. The three groups are invisible until the first row of each group steps back.</li>
+    <li>Steps 4&ndash;5 do the same thing with real writing. Ask: <em>&ldquo;Where does the new idea start?&rdquo;</em></li>
+    <li>An indent is about two fingers wide. Show it on the board with two fingers.</li>
+  </ul>
+
+  <h3>2 &middot; Full lines</h3>
+  <ul>
+    <li>Steps 6&ndash;7: lines that start in random places are hard to read. Only the first line is indented; every other line begins at the red wall.</li>
+    <li>Steps 8&ndash;9: stopping early wastes the paper and chops up the words. Write to the green wall, then sweep back to the red one.</li>
+  </ul>
+
+  <h3>3 &middot; Punctuation</h3>
+  <ul>
+    <li>Steps 10&ndash;11: a floating period looks like it belongs to the next sentence. Ending punctuation holds on tight to the last letter.</li>
+  </ul>
+
+  <h3>Keyboard &amp; smartboard</h3>
+  <ul>
+    <li><kbd>&rarr;</kbd> <kbd>Space</kbd> next &middot; <kbd>&larr;</kbd> back &middot; <kbd>Home</kbd> <kbd>End</kbd> first/last</li>
+    <li><kbd>R</kbd> replay this step &middot; <kbd>F</kbd> full screen &middot; <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> jump to a chapter</li>
+    <li>The lesson scales itself to the window, so it never scrolls. Works offline once loaded &mdash; install it from your browser menu to open it like an app.</li>
+  </ul>
+
+  <button type="button" id="help-close" autofocus>Got it</button>
+</dialog>
+
+<noscript>
+  <p style="background:#fff;padding:16px;margin:16px;border-radius:12px;font-weight:700">
+    This lesson needs JavaScript turned on to animate the paragraphs.
+  </p>
+</noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  var STAGE_W = 1280;
+  var STAGE_H = 800;
+
+  var CHAPTERS = ['1 · Indent', '2 · Full Lines', '3 · Punctuation'];
+
+  // Each step names the scene to show and the state to put it in.
+  var STEPS = [
+    { ch: 0, scene: 'emoji', state: [],
+      title: 'These students are standing in 3 groups — but we can’t tell them apart!',
+      why: 'Without a signal, one solid block of writing looks like one long idea.' },
+    { ch: 0, scene: 'emoji', state: ['is-indent'],
+      title: 'Let’s indent the first row of each group!',
+      why: 'The indent is a signal that says “a new idea starts here.”' },
+    { ch: 0, scene: 'emoji', state: ['is-indent', 'is-skip'],
+      title: 'Skipping a line makes the groups even easier to see.',
+      why: 'Indenting and skipping a line do the same job: they show where one idea ends and the next begins.' },
+    { ch: 0, scene: 'text', state: [],
+      title: 'Now real writing. Can you find the 3 paragraphs in here?',
+      why: 'Three separate ideas — running out, playing, and lining up — but nothing shows you where they split.' },
+    { ch: 0, scene: 'text', state: ['is-indent', 'is-skip'],
+      title: 'Much better! A two-finger indent shows where each new idea begins.',
+      why: 'Readers use indents to take a breath and get ready for the next idea.' },
+
+    { ch: 1, scene: 'left', state: [],
+      title: 'These lines all start in different places. Where do your eyes go next?',
+      why: 'When lines begin in random spots the reader has to hunt for the start of every single line.' },
+    { ch: 1, scene: 'left', state: ['is-aligned'],
+      title: 'Only the FIRST line is indented. Every other line starts at the red wall.',
+      why: 'One straight left edge means your eyes always know exactly where to land.' },
+    { ch: 1, scene: 'fill', state: [],
+      title: 'This writer stopped early, so the paper is full of holes.',
+      why: 'Stopping early chops the sentence into little pieces and wastes the line.' },
+    { ch: 1, scene: 'fill', state: ['is-full'],
+      title: 'Write all the way to the green edge — then sweep back to the far left.',
+      why: 'Fill the line, return to the left wall, keep going. That sweep keeps reading and writing in rhythm.' },
+
+    { ch: 2, scene: 'punct', state: [],
+      title: 'Uh oh — the periods floated away. Where does each sentence end?',
+      why: 'A floating period looks like it belongs to the NEXT sentence, so the reader stops in the wrong place.' },
+    { ch: 2, scene: 'punct', state: ['is-home'],
+      title: 'Ending punctuation holds on tight to the last letter!',
+      why: 'Snug punctuation tells the reader exactly where to stop and take a breath.' }
+  ];
+
+  var scenes = {};
+  Array.prototype.forEach.call(document.querySelectorAll('.scene'), function (el) {
+    scenes[el.dataset.scene] = el;
+  });
+
+  var stage = document.getElementById('stage');
+  var paper = document.getElementById('paper');
+  var banner = document.getElementById('banner');
+  var instruction = document.getElementById('instruction');
+  var why = document.getElementById('why');
+  var live = document.getElementById('live');
+  var btnBack = document.getElementById('btn-back');
+  var btnNext = document.getElementById('btn-next');
+  var dotsBox = document.getElementById('dots');
+  var tabsBox = document.getElementById('chapter-tabs');
+  var help = document.getElementById('help');
+
+  var current = 0;
+  var textTimer = null;
+
+  // ---- fit the stage to the window --------------------------------------
+  function fit() {
+    var vv = window.visualViewport;
+    var w = vv ? vv.width : window.innerWidth;
+    var h = vv ? vv.height : window.innerHeight;
+    var scale = Math.min(w / STAGE_W, h / STAGE_H) * 0.985;
+    stage.style.setProperty('--s', scale);
+    document.body.classList.toggle('portrait', w / h < 0.9);
+  }
+
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', fit);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+  document.addEventListener('fullscreenchange', fit);
+  fit();
+
+  // ---- chapter tabs and step dots ---------------------------------------
+  var tabs = CHAPTERS.map(function (label, i) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tab';
+    btn.textContent = label;
+    btn.addEventListener('click', function () { goTo(firstStepOf(i)); });
+    tabsBox.appendChild(btn);
+    return btn;
+  });
+
+  var dots = STEPS.map(function (step, i) {
+    if (i > 0 && step.ch !== STEPS[i - 1].ch) {
+      var gap = document.createElement('div');
+      gap.className = 'gap';
+      dotsBox.appendChild(gap);
+    }
+    var dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'dot';
+    dot.title = 'Step ' + (i + 1);
+    dot.setAttribute('aria-label', 'Go to step ' + (i + 1));
+    dot.addEventListener('click', function () { goTo(i); });
+    dotsBox.appendChild(dot);
+    return dot;
+  });
+
+  function firstStepOf(chapter) {
+    for (var i = 0; i < STEPS.length; i++) {
+      if (STEPS[i].ch === chapter) return i;
+    }
+    return 0;
+  }
+
+  // ---- applying a step ---------------------------------------------------
+
+  // `animate` false paints the state with transitions switched off, which is
+  // what a freshly swapped-in scene needs: it should arrive already set up
+  // rather than run its animation while it is still invisible.
+  function paint(scene, state, animate) {
+    var classes = ['scene', 'on'].concat(state);
+    if (animate) {
+      scene.className = classes.join(' ');
+      return;
+    }
+    scene.className = classes.concat('no-anim').join(' ');
+    void scene.offsetWidth; // flush the muted state before re-enabling
+    scene.className = classes.join(' ');
+  }
+
+  function goTo(index, opts) {
+    if (index < 0 || index >= STEPS.length) return;
+
+    var previous = STEPS[current];
+    var step = STEPS[index];
+    var sameScene = previous.scene === step.scene && index !== current;
+    var replaying = opts && opts.replay;
+    current = index;
+
+    for (var name in scenes) {
+      if (name !== step.scene) scenes[name].classList.remove('on');
+    }
+    paint(scenes[step.scene], step.state, sameScene || replaying);
+
+    paper.classList.toggle('show-left-wall', step.scene === 'left');
+    paper.classList.toggle('show-right-wall', step.scene === 'fill');
+
+    banner.classList.add('fading');
+    clearTimeout(textTimer);
+    textTimer = setTimeout(function () {
+      instruction.textContent = step.title;
+      why.textContent = step.why;
+      banner.classList.remove('fading');
+    }, 180);
+
+    live.textContent = 'Step ' + (index + 1) + ' of ' + STEPS.length + '. ' + step.title;
+
+    btnBack.disabled = index === 0;
+    btnNext.disabled = index === STEPS.length - 1;
+
+    dots.forEach(function (dot, i) {
+      dot.setAttribute('aria-current', i === index ? 'true' : 'false');
+      dot.classList.toggle('done', i < index);
+    });
+
+    tabs.forEach(function (tab, i) {
+      tab.setAttribute('aria-current', i === step.ch ? 'true' : 'false');
+    });
+
+    if (history.replaceState) history.replaceState(null, '', '#' + (index + 1));
+  }
+
+  // Replay re-runs the current step's animation from the state before it.
+  function replay() {
+    var step = STEPS[current];
+    var before = current > 0 && STEPS[current - 1].scene === step.scene
+      ? STEPS[current - 1].state
+      : [];
+    paint(scenes[step.scene], before, false);
+    setTimeout(function () { goTo(current, { replay: true }); }, 420);
+  }
+
+  // ---- controls ----------------------------------------------------------
+  btnBack.addEventListener('click', function () { goTo(current - 1); });
+  btnNext.addEventListener('click', function () { goTo(current + 1); });
+  document.getElementById('btn-replay').addEventListener('click', replay);
+
+  document.getElementById('btn-help').addEventListener('click', function () {
+    if (typeof help.showModal === 'function') help.showModal();
+    else help.setAttribute('open', '');
+  });
+  document.getElementById('help-close').addEventListener('click', function () {
+    if (typeof help.close === 'function') help.close();
+    else help.removeAttribute('open');
+  });
+
+  document.getElementById('btn-full').addEventListener('click', function () {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(function () {});
+    }
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (help.open || event.metaKey || event.ctrlKey || event.altKey) return;
+    switch (event.key) {
+      case 'ArrowRight': case 'PageDown': case ' ': case 'Enter':
+        if (document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+        goTo(current + 1); break;
+      case 'ArrowLeft': case 'PageUp': goTo(current - 1); break;
+      case 'Home': goTo(0); break;
+      case 'End': goTo(STEPS.length - 1); break;
+      case 'r': case 'R': replay(); break;
+      case 'f': case 'F': document.getElementById('btn-full').click(); break;
+      case '1': goTo(firstStepOf(0)); break;
+      case '2': goTo(firstStepOf(1)); break;
+      case '3': goTo(firstStepOf(2)); break;
+      default: return;
+    }
+    event.preventDefault();
+  });
+
+  // ---- start -------------------------------------------------------------
+  var fromHash = parseInt((location.hash || '').slice(1), 10);
+  goTo(fromHash >= 1 && fromHash <= STEPS.length ? fromHash - 1 : 0);
+})();
+</script>
+</body>
+</html>

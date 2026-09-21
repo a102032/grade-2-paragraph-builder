@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1" width="512" height="512" role="img" aria-label="An indented paragraph on a sheet of lined paper">
+  <rect width="1" height="1" fill="#8b5a2b"/>
+  <rect x=".10" y=".10" width=".80" height=".80" rx=".075" fill="#6f4620"/>
+  <rect x=".125" y=".125" width=".75" height=".75" rx=".06" fill="#fdf6e3"/>
+  <g fill="#87cefa">
+    <rect x=".165" y=".363" width=".68" height=".016"/>
+    <rect x=".165" y=".508" width=".68" height=".016"/>
+    <rect x=".165" y=".653" width=".68" height=".016"/>
+    <rect x=".165" y=".798" width=".68" height=".016"/>
+  </g>
+  <rect x=".265" y=".165" width=".023" height=".67" fill="#ff6b6b"/>
+  <g fill="#1f2937">
+    <rect x=".435" y=".265" width=".380" height=".088" rx=".028"/>
+    <rect x=".315" y=".410" width=".500" height=".088" rx=".028"/>
+    <rect x=".315" y=".555" width=".500" height=".088" rx=".028"/>
+    <rect x=".315" y=".700" width=".340" height=".088" rx=".028"/>
+  </g>
+</svg>
