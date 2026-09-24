@@ -24,6 +24,54 @@ The lesson is 13 steps across 3 chapters:
 Nothing animates until the teacher presses **Next**, so a step can be
 talked over for as long as needed.
 
+## Architecture
+
+Everything lives in one `<script>` block at the bottom of `index.html`,
+built around a single data-driven state machine — there's no framework.
+
+- **`STEPS`** — an array of 13 step objects (`{ ch, scene, state, title,
+  why }`) that is the entire lesson script. `ch` is the chapter index,
+  `scene` names which `.scene` element to show, `state` is the list of
+  CSS classes that put that scene into this step's visual state, and
+  `title`/`why` are the on-screen instruction text. Adding or reordering
+  lesson content means editing this array, not the markup.
+- **Scenes** — each chapter's visuals are a handful of `.scene` elements
+  in the HTML (children rows, a paragraph, filled/unfilled lines,
+  floating/stranded punctuation). Only one is `.on` (visible) at a time.
+  A step doesn't build new DOM; it just toggles which scene is visible
+  and which state-classes are applied to it, and CSS transitions animate
+  the class change.
+- **`goTo(index)`** — the only place that changes what's on screen. It
+  swaps the visible scene, paints the new state (animated if staying on
+  the same scene, instant if switching scenes), updates the instruction
+  banner, updates chapter tabs / step dots / Back-Next button state, and
+  writes the step number to `location.hash` so a step can be linked to
+  directly (`#7`).
+- **`paint(scene, state, animate)`** — applies state-classes to a scene,
+  either normally (animated) or by forcing a reflow with the `no-anim`
+  class first (used when a scene has just become visible, so it doesn't
+  animate in from its "before" state).
+- **`replay()`** — resets the current scene to its state *before* this
+  step, then calls `goTo` again a moment later so the step's animation
+  visibly replays.
+- **`placeStrays()`** — the one piece of real layout math: it measures
+  rendered text-box positions at runtime (so it's correct for whichever
+  font actually loaded) to compute how far a "stranded" punctuation mark
+  must fly to reach its word, and to shrink hand-placed lines that would
+  otherwise overflow under a fallback font. Re-run on font load and
+  whenever the "strand" scene is shown.
+- **`fit()`** — computes a single CSS scale factor so the fixed
+  1280×800 stage fits the current window/viewport, run on load, resize,
+  orientation change, and fullscreen toggle.
+- Chapter tabs and step dots are generated from `CHAPTERS`/`STEPS` at
+  startup, not hand-written in the HTML.
+- Input handling (buttons, arrow keys, number keys 1/2/3, R, F) all
+  funnels into the same `goTo`/`replay`/fullscreen calls above — there's
+  no separate code path for keyboard vs. mouse.
+
+There is no server-side logic at all: the app is static files plus this
+client-side state machine, cached by `sw.js` for offline use.
+
 ## Files
 
 - `index.html` — the entire app: markup, CSS, and JS in one file. No build
@@ -72,6 +120,38 @@ zero-dependency static site.
 - Served via `python3 -m http.server` for local dev — service workers
   don't register from `file://`, so always test over HTTP.
 - Deployed via GitHub Pages, source = branch `main`, root folder.
+
+## Planned / Not Yet Built
+
+Requested next, not yet designed or started. Flagging up front: all three
+sit outside the current architecture (static files, no server, no
+accounts), so each is a real scope jump, not a small addition on top of
+`index.html`.
+
+1. **Attendance-taking feature.** Needs persistent storage (a roster, and
+   who was marked present, that survives across sessions/devices) — the
+   app currently has zero persistence of any kind. Needs a decision on
+   where that data lives (a backend + database, or a serverless/free-tier
+   store like Firebase/Supabase) before any UI work starts.
+2. **Google Classroom integration.** Requires registering an OAuth app
+   with Google, a Classroom API integration, and (per Google's terms) a
+   privacy policy and possibly a verification/review process since it'd
+   touch student-roster data. This is the most involved of the three and
+   the one most worth scoping carefully given it deals with student data.
+3. **Turn this into a real app with teacher login, at no cost to me.**
+   Needs (a) authentication and (b) a database to hold accounts and
+   whatever attendance/Classroom data logins would gate — neither exists
+   today, and a static GitHub Pages site can't provide either on its own.
+   "Costs nothing" is achievable at small scale (e.g. Firebase
+   Auth + Firestore, or Supabase, both have free tiers) but isn't free at
+   unlimited scale, and it's a genuine architecture change: the app stops
+   being a zero-dependency static site and gains a backend dependency.
+   Worth deciding as its own project before attendance/Classroom work,
+   since login would likely gate both of those features anyway.
+
+None of these have an implementation plan yet — this section is a
+placeholder for "known wanted, not yet designed" so a future session
+doesn't have to be told again.
 
 ## Testing changes
 
